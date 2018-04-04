@@ -1,0 +1,545 @@
+---
+title: 'Assignment 8: Brain Cancer Cluster Analysis'
+output:
+  html_document:
+    fig_height: 9
+    fig_width: 15
+    toc: yes
+  pdf_document:
+    toc: yes
+---
+## Assignment Overview
+
+This is the markdownfile for my assignment 8 on cluster analysis. For this assignment I expanded on the code I wrote for the cluster analysis class project adding more methods for distance calculation and visualization. Once again, I used cancer gene expression and survival data to show clustering applications to analyze genetic data on two types brain cancers: Low Grade Glioma (Glioma) and Glioblastoma. Only genes that had a p-value < 0.05 relating gene expression to survival were included in the analysis. Shared genes significant to survival in both brain cancers was subsetted and then random samples of 50 and 100 genes were chosen to create the corresponding glioma and glioblastoma dataframes for clustering analysis. Methods used include hierarchiacal clustering using Average Linkage and Ward(ANOVA) and partition clustering using K-means and PAM. I also explored visualization using heatmaps with correlation-based distance measures including "pearson", "kendall", and "spearman" methods.
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(cluster)
+library(NbClust)
+library(flexclust)
+library(rattle)
+library(ggplot2)
+library(readxl)
+library(psych)
+```
+
+## Datasets Used
+Gene expression data is based on The Cancer Genome Atlast (TCGA) found on the National Cancer Institute's Genomic Data Portal (https://gdc-portal.nci.nih.gov/). Survival data was derived from Stanford's Precog database (https://precog.stanford.edu/), and Oncolnc (http://www.oncolnc.org/). The data was reformatted to suit clusting analysis.
+```{r loading datasets for clustering, echo=TRUE}
+precogdata <- read_excel("/Users/louisecabansay/Downloads/Precog_MetaZ.xlsx")
+gbm.oncolnc <- read_excel("/Users/louisecabansay/Documents/School Work/UCBX R Class/GBM_mrna.xlsx")
+gli.oncolnc <- read_excel("/Users/louisecabansay/Documents/School Work/UCBX R Class/LowerGradeGlioma.xlsx")
+gbm.precog <-  data.frame(precogdata$Gene, precogdata$Name, precogdata$`Unweighted_meta-Z_of_all_cancers`, precogdata$Brain_cancer_Glioblastoma)
+gli.precog <-  data.frame(precogdata$Gene, precogdata$Name, precogdata$`Unweighted_meta-Z_of_all_cancers`, precogdata$Brain_cancer_Glioma)
+#examine data
+names(gbm.oncolnc)[1] <- "GeneName"
+names(gli.oncolnc)[1] <- "GeneName"
+names(gbm.precog)[1] <-"GeneName"
+names(gli.precog)[1] <-"GeneName"
+str(gbm.precog)
+str(gbm.oncolnc)
+str(gli.oncolnc)
+describe(gbm.precog)
+describe(gbm.oncolnc)
+describe(gli.oncolnc)
+```
+
+## Master Glioma and Glioblastoma dataframes
+
+Combine different datasets from databases. Subset to contain only genes with significant p-values
+
+```{r Glioma and Glioblastoma}
+gbm.df <- merge(gbm.precog, gbm.oncolnc, by = "GeneName")
+gli.df <- merge(gli.precog, gli.oncolnc, by = "GeneName")
+head(gbm.df)
+head(gli.df)
+names(gbm.df)[2:4] <- c("GeneFunction", "Unweighted_meta_Z_allcancers", "precog_Z")
+names(gli.df)[2:4] <- c("GeneFunction", "Unweighted_meta_Z_allcancers", "precog_Z")
+sig.gbm<-unique(gbm.df[gbm.df$`Raw p-value` <0.05,])
+sig.gli<-(gli.df[gli.df$`Raw_p-value`<0.05,])
+gli.genes<-unique(sig.gli[sig.gli$GeneName %in% sig.gbm$GeneName,])
+gbm.genes<-unique(sig.gbm[sig.gbm$GeneName %in% gli.genes$GeneName,])
+remove <- "4748"
+gli.genes <- gli.genes[!rownames(gli.genes) %in% remove,]
+```
+
+## Standardize Values
+
+standardize num variables to a mean of 0 with a standard deviation of 1 for comparison
+```{r Standardization}
+gbm.scaled <- scale(gbm.genes[3:9])
+gli.scaled <- scale(gli.genes[3:9])
+glioblastoma<-cbind(gbm.genes[1:2], gbm.scaled)
+glioma<-cbind(gli.genes[1:2], gli.scaled)
+names(glioblastoma)[6:7] <-c("pvalue", "bh_pvalue")
+names(glioma)[6:7] <-c("pvalue", "bh_pvalue")
+describe(glioblastoma)
+describe(glioma)
+```
+
+
+## Average Linkage Clustering using 50 genes
+50 genes are randomly sampled from master list of glioblastoma genes (because it is the smaller set).
+The same 50 genes are used to cluster both glioma and glioblastoma. Sets are saved to csv file to reproduce results.
+In this markdownfile the actual sampling code is commented out and a previously generated set is loaded.
+
+```{r AvgLinkage, fig.height=15}
+#Average-Linkage Clustering
+#w/50 randomly sampled genes
+#r50.glioblastoma <- glioblastoma[sample(1:nrow(glioblastoma), 50, replace=FALSE),]
+#r50.glioma <- glioma[glioma$GeneName %in% r50.glioblastoma$GeneName,]
+
+#save set to CSV to replicate later
+#write.csv(r50.glioblastoma, "r50glioblastoma.csv")
+#write.csv(r50.glioma, "r50glioma.csv")
+r50.glioblastoma <-read.csv("/Users/louisecabansay/Dropbox (Personal)/R Projects/Clustering Project/r50glioblastoma.csv")
+r50.glioma <-read.csv("/Users/louisecabansay/Dropbox (Personal)/R Projects/Clustering Project/r50glioma.csv")
+row.names(r50.glioblastoma) <- r50.glioblastoma$GeneName
+row.names(r50.glioma) <- r50.glioma$GeneName   
+opar <- par(no.readonly=TRUE) #save current state
+
+par(mfrow=c(2,1)) #layout dendogram hierarchy plots 2 rows, 1 column
+
+#make glioblastoma cluster dendogram
+nc.r50.glioblastoma <- r50.glioblastoma[3:9]                   
+d.r50.glioblastoma <- dist(nc.r50.glioblastoma)                                          
+fit.gbm.average50 <- hclust(d.r50.glioblastoma, method="average")                          
+plot(fit.gbm.average50, hang=-1, cex=.8, main="50 gene Average Linkage Clustering for Glioblastoma")
+
+#make glioma cluster dendogram
+nc.r50.glioma <- r50.glioma[3:9]                           
+d.r50.glioma <- dist(nc.r50.glioma)                                          
+fit.gli.average50 <- hclust(d.r50.glioma, method="average")                          
+plot(fit.gli.average50, hang=-1, cex=.8, main="50 gene Average Linkage Clustering for Glioma")
+
+par(opar)
+```
+
+
+## Selecting best number of clusters for both glioma50 and glioblastoma50
+Shows best number of clusters to cluster each dataset using nbclust package. 
+5 clusters chosen for both cancers for comparability
+
+```{r Best50geneclusters}
+nc.gli50 <- NbClust(nc.r50.glioma, distance="euclidean", 
+                  min.nc=2, max.nc=10, method="average")
+table(nc.gli50$Best.n[1,])
+
+nc.gbm50 <- NbClust(nc.r50.glioblastoma, distance="euclidean", 
+                    min.nc=2, max.nc=10, method="average")
+table(nc.gbm50$Best.n[1,])
+
+par(opar)
+par(mfrow=c(1,2)) #layout cluster bar plots next to each other plots 1rows, 2column
+barplot(table(nc.gli50$Best.n[1,]), 
+        xlab="Numer of Clusters", ylab="Number of Criteria",
+        main="Number of GLI Clusters Chosen by 7 Criteria")
+
+barplot(table(nc.gbm50$Best.n[1,]), 
+        xlab="Numer of Clusters", ylab="Number of Criteria",
+        main="Number of GBM Clusters Chosen by 7 Criteria") 
+
+par(opar)
+
+```
+
+## Create 5 Cluster dendogram for 50 glioma genes
+
+```{r AvgLinkage 50 Glioma}
+
+gli.50.clusters <- cutree(fit.gli.average50, k=5) 
+table(gli.50.clusters) #makes table showing how many genes in each cluster
+aggregate(nc.r50.glioma, by=list(cluster=gli.50.clusters), median) 
+aggregate(as.data.frame(nc.r50.glioma), by=list(cluster=gli.50.clusters),
+          median)
+
+#plot clusters w/ red boxes indicating clusters
+plot(fit.gli.average50, hang=-1, cex=.8,  
+     main="GLI Average Linkage Clustering\n5 Cluster Solution") 
+#overlay red rectangle on cluster
+rect.hclust(fit.gli.average50, k=5)
+par(opar)
+
+```
+
+## Create 5 Cluster dendogram for 50 glioblastoma genes
+
+```{r AvgLinkage 50 Glioblastoma}
+gbm.50.clusters <- cutree(fit.gbm.average50, k=5) 
+table(gbm.50.clusters)
+aggregate(nc.r50.glioblastoma, by=list(cluster=gbm.50.clusters), median) 
+aggregate(as.data.frame(nc.r50.glioblastoma), by=list(cluster=gbm.50.clusters),
+          median)
+plot(fit.gbm.average50, hang=-1, cex=.8,  
+     main="GBM Average Linkage Clustering\n5 Cluster Solution")
+rect.hclust(fit.gbm.average50, k=5)
+par(opar)
+```
+
+## Generate table with clustering information for 50 Glioma Genes
+
+```{r 50Glioma.5Cluster.Table}
+gli.50.clist <- lapply(sort(unique(gli.50.clusters)), function(x) r50.glioma[which(gli.50.clusters==x),])
+
+gli.cluster.50.1 <- cbind(gli.50.clist[[1]], Cluster = "Gli.Cluster1")
+gli.cluster.50.2 <- cbind(gli.50.clist[[2]], Cluster = "Gli.Cluster2")
+gli.cluster.50.3 <- cbind(gli.50.clist[[3]], Cluster = "Gli.Cluster3")
+gli.cluster.50.4 <- cbind(gli.50.clist[[4]], Cluster = "Gli.Cluster4")
+gli.cluster.50.5 <- cbind(gli.50.clist[[5]], Cluster = "Gli.Cluster5")
+#gli.cluster.50.6 <- cbind(gli.50.clist[[6]], Cluster = "Gli.Cluster6")
+#gli.cluster.50.7 <- cbind(gli.50.clist[[7]], Cluster = "Gli.Cluster7")
+#gli.cluster.50.8 <- cbind(gli.50.clist[[8]], Cluster = "Gli.Cluster8")
+glioma_50_Genes_C <- rbind(gli.cluster.50.1, gli.cluster.50.2, gli.cluster.50.3, gli.cluster.50.4,
+                                 gli.cluster.50.5)# gli.cluster.50.6,gli.cluster.50.7, gli.cluster.50.8)
+#save table to csv
+write.csv(glioma_50_Genes_C, "Table_Glioma_50genes_5Clust.csv")
+glioma_50_Genes_C[,-c(1,3:9)]
+```
+
+## Generate table with clustering information for 50 Glioblastoma Genes
+```{r 50Glioblastoma.5Cluster.Table}
+gbm.50.clist <- lapply(sort(unique(gbm.50.clusters)), function(x) r50.glioblastoma[which(gbm.50.clusters==x),])
+
+gbm.cluster.50.1 <- cbind(gbm.50.clist[[1]], Cluster = "Gbm.Cluster1")
+gbm.cluster.50.2 <- cbind(gbm.50.clist[[2]], Cluster = "Gbm.Cluster2")
+gbm.cluster.50.3 <- cbind(gbm.50.clist[[3]], Cluster = "Gbm.Cluster3")
+gbm.cluster.50.4 <- cbind(gbm.50.clist[[4]], Cluster = "Gbm.Cluster4")
+gbm.cluster.50.5 <- cbind(gbm.50.clist[[5]], Cluster = "Gbm.Cluster5")
+#gbm.cluster.50.6 <- cbind(gbm.50.clist[[6]], Cluster = "Gbm.Cluster6")
+#gbm.cluster.50.7 <- cbind(gbm.50.clist[[7]], Cluster = "Gbm.Cluster7")
+#gbm.cluster.50.8 <- cbind(gbm.50.clist[[8]], Cluster = "Gbm.Cluster8")
+glioblastoma_50_Genes_C <- rbind(gbm.cluster.50.1, gbm.cluster.50.2, gbm.cluster.50.3, gbm.cluster.50.4,
+                               gbm.cluster.50.5) #gbm.cluster.50.6,gbm.cluster.50.7, gbm.cluster.50.8)
+
+#save cluster table results into csv
+#write.csv(glioblastoma_50_Genes_C, "Table_Glioblastoma_50genes_5Clust.csv")
+
+glioblastoma_50_Genes_C[,-c(1,3:9)]
+
+```
+
+
+## Hierarchical Clustering of 100 genes using Ward Method
+
+For markdownfile a previously generated random gene list was loaded
+```{r WardMethod, message=FALSE, warning=FALSE}
+#generate 100 random genes that are significant in both gli and gbm
+#grabs from glioblastoma & glioma dfs (contains same genes)
+#r100.glioblastoma <- glioblastoma[sample(1:nrow(glioblastoma), 100, replace=FALSE),]
+#r100.glioma <- glioma[glioma$GeneName %in% r100.glioblastoma$GeneName,]
+
+#save randomly generated gene df into csv for reproducibility 
+#write.csv(r100.glioblastoma, "r100glioblastoma.csv")
+#write.csv(r100.glioma, "r100glioma.csv")
+
+r100.glioblastoma <-read.csv("/Users/louisecabansay/Dropbox (Personal)/R Projects/Clustering Project/r100glioblastoma.csv")
+r100.glioma <-read.csv("/Users/louisecabansay/Dropbox (Personal)/R Projects/Clustering Project/r100glioma.csv")
+row.names(r100.glioblastoma) <- r100.glioblastoma$GeneName
+row.names(r100.glioma) <- r100.glioma$GeneName
+
+par(opar)
+nc.r100.glioblastoma <- r100.glioblastoma[3:9] 
+d.r100.glioblastoma <- dist(nc.r100.glioblastoma)                                          
+fit.gbm.ward100 <- hclust(d.r100.glioblastoma, method="ward")                          
+plot(fit.gbm.ward100, hang=-1, cex=.8, main="100 Gene Ward Method Clustering: Glioblastoma")
+
+nc.r100.glioma <- r100.glioma[3:9]
+d.r100.glioma <- dist(nc.r100.glioma)                                          
+fit.gli.ward100 <- hclust(d.r100.glioma, method="ward")                          
+plot(fit.gli.ward100, hang=-1, cex=.8, main="100 Gene Ward Method Clustering: Glioma")
+par(opar)
+```
+
+## Best Ward Clusters for 100 genes
+
+
+```{r BestClustersWard}
+#find best number of clusters for 100 genes hierarchial clustering
+
+#find for 100 gli genes
+nc.gli.100 <- NbClust(nc.r100.glioma, distance="euclidean", 
+              min.nc=2, max.nc=20, method="ward.D")
+table(nc.gli.100$Best.n[1,])
+barplot(table(nc.gli.100$Best.n[1,]), 
+        xlab="Number of Clusters", ylab="Number of Criteria",
+        main="Number of Ward Clusters Chosen by 7 Criteria: 100 GLI") 
+par(opar)
+
+
+#find for 100 gbm genes
+nc.gbm.100 <- NbClust(nc.r100.glioblastoma, distance="euclidean", 
+                  min.nc=2, max.nc=20, method="ward.D")
+table(nc.gbm.100$Best.n[1,])
+barplot(table(nc.gbm.100$Best.n[1,]), 
+        xlab="Numer of Clusters", ylab="Number of Criteria",
+        main="Number of Ward Clusters Chosen by 7 Criteria: 100 GBM") 
+par(opar)
+```
+
+## Glioma 100 gene Ward method with 10 clusters
+
+```{r GliWard Clusters, message=TRUE, warning=FALSE}
+
+#plot 100 gene glioma dendogram w/red boxes around 10 clusters
+gli.100.clusters <- cutree(fit.gli.ward100, k=10) 
+table(gli.100.clusters)
+aggregate(nc.r100.glioma, by=list(cluster=gli.100.clusters), median) 
+aggregate(as.data.frame(nc.r100.glioma), by=list(cluster=gli.100.clusters),
+          median)
+plot(fit.gli.ward100, hang=-1, cex=.8,  
+     main="Glioma 100 Gene Ward Method Clustering\n10 Cluster Solution")
+#outline k clusters in red boxes on dendogram
+rect.hclust(fit.gli.ward100, k=10)
+```
+
+## Glioblastoma 100 gene Ward method with 10 clusters
+
+```{r GbmWard Clusters, message=TRUE, warning=FALSE}
+par(opar)
+#plot 100 gene glioblastoma dendogram w/redboxes around 10 clusters
+gbm.100.clusters <- cutree(fit.gbm.ward100, k=10) 
+table(gbm.100.clusters)
+aggregate(nc.r100.glioblastoma, by=list(cluster=gbm.100.clusters), median) 
+aggregate(as.data.frame(nc.r100.glioblastoma), by=list(cluster=gbm.100.clusters),
+          median)
+plot(fit.gbm.ward100, hang=-1, cex=.8,  
+     main="Glioblastoma 100 Gene Ward Method Clustering\n10 Cluster Solution")
+#outline k clusters in red boxes on dendogram
+rect.hclust(fit.gbm.ward100, k=10)
+
+#K-means cluster plot of 100 glioblastoma genes
+km.100.glioblastoma <- kmeans(nc.r100.glioblastoma, 4, iter.max = 10, nstart=25) 
+km.100.glioblastoma$size
+km.100.glioblastoma$centers                                               
+aggregate(nc.r100.glioblastoma, by=list(cluster=km.100.glioblastoma$cluster), mean)
+clusplot(nc.r100.glioblastoma, km.100.glioblastoma$cluster, color=TRUE, shade=TRUE, 
+         labels=1, lines=0, main = "Glioblastoma 100 gene K-means Cluster Plot, Outliers Removed")
+```
+
+
+## Tables for Ward clusters 
+```{r WardTables}
+#Generate tables for ward clustering results
+
+#100 gene glioma 10 cluster table
+
+gli.100.clist <- lapply(sort(unique(gli.100.clusters)), function(x) r100.glioma[which(gli.100.clusters==x),])
+gli.cluster.100.1 <- cbind(gli.100.clist[[1]], Cluster = "C1")
+gli.cluster.100.2 <- cbind(gli.100.clist[[2]], Cluster = "C2")
+gli.cluster.100.3 <- cbind(gli.100.clist[[3]], Cluster = "C3")
+gli.cluster.100.4 <- cbind(gli.100.clist[[4]], Cluster = "C4")
+gli.cluster.100.5 <- cbind(gli.100.clist[[5]], Cluster = "C5")
+gli.cluster.100.6 <- cbind(gli.100.clist[[6]], Cluster = "C6")
+gli.cluster.100.7 <- cbind(gli.100.clist[[7]], Cluster = "C7")
+gli.cluster.100.8 <- cbind(gli.100.clist[[8]], Cluster = "C8")
+gli.cluster.100.9 <- cbind(gli.100.clist[[9]], Cluster = "C9")
+gli.cluster.100.10 <- cbind(gli.100.clist[[10]], Cluster = "C10")
+glioma_100_Genes_C <- rbind(gli.cluster.100.1, gli.cluster.100.2, gli.cluster.100.3, gli.cluster.100.4,
+                           gli.cluster.100.5,gli.cluster.100.6,gli.cluster.100.7, gli.cluster.100.8, 
+                           gli.cluster.100.9, gli.cluster.100.10)
+
+glioma_100_Genes_C[,-c(1,3:9)]
+
+#100 gene glioblastoma 10 cluster table
+gbm.100.clist <- lapply(sort(unique(gbm.100.clusters)), function(x) r100.glioblastoma[which(gbm.100.clusters==x),])
+gbm.cluster.100.1 <- cbind(gbm.100.clist[[1]], Cluster = "C1")
+gbm.cluster.100.2 <- cbind(gbm.100.clist[[2]], Cluster = "C2")
+gbm.cluster.100.3 <- cbind(gbm.100.clist[[3]], Cluster = "C3")
+gbm.cluster.100.4 <- cbind(gbm.100.clist[[4]], Cluster = "C4")
+gbm.cluster.100.5 <- cbind(gbm.100.clist[[5]], Cluster = "C5")
+gbm.cluster.100.6 <- cbind(gbm.100.clist[[6]], Cluster = "C6")
+gbm.cluster.100.7 <- cbind(gbm.100.clist[[7]], Cluster = "C7")
+gbm.cluster.100.8 <- cbind(gbm.100.clist[[8]], Cluster = "C8")
+gbm.cluster.100.9 <- cbind(gbm.100.clist[[9]], Cluster = "C9")
+gbm.cluster.100.10 <- cbind(gbm.100.clist[[10]], Cluster = "C10")
+glioblastoma_100_Genes_C <- rbind(gbm.cluster.100.1, gbm.cluster.100.2, gbm.cluster.100.3, gbm.cluster.100.4,
+                            gbm.cluster.100.5,gbm.cluster.100.6,gbm.cluster.100.7, gbm.cluster.100.8, 
+                            gbm.cluster.100.9, gbm.cluster.100.10)
+
+glioblastoma_100_Genes_C[,-c(1,3:9)]
+#save cluster table results to csvs 
+write.csv(glioblastoma_100_Genes_C, "Table_Glioblastoma_100genes_10WClust.csv")
+write.csv(glioma_100_Genes_C, "Table_Glioma_100genes_10WClust.csv")
+
+```
+
+## K-means and PAM clustering of Glioma and Glioblastoma Genes
+
+```{r Patition Clustering}
+library(ggplot2)
+library(ggfortify)
+#Create wssplot function to help determine ideal number of clusters based on data
+wssplot <- function(data, nc=20, seed=1234){
+  wss <- (nrow(data)-1)*sum(apply(data,2,var))
+  for (i in 2:nc){
+    set.seed(seed)
+    wss[i] <- sum(kmeans(data, centers=i)$withinss)}
+  plot(1:nc, wss, type="b", xlab="Number of Clusters",
+       ylab="Within groups sum of squares")}
+
+#K-means clustering of glioblastoma dataset
+head(glioblastoma)
+row.names(glioblastoma) <- glioblastoma$GeneName
+df.km.glioblastoma <- glioblastoma[-c(1:2)]
+colnames(df.km.glioblastoma)<- c("unweighted_meta_z_all", "precog_Z", "cox_coefficient","pvalue", "bh_pvalue", "median_expression", "mean_expresson")
+wssplot(df.km.glioblastoma)      
+library(NbClust)
+
+nc.km.glioblastoma <- NbClust(df.km.glioblastoma, min.nc=2, max.nc=25, method="kmeans")
+par(opar)
+table(nc.km.glioblastoma$Best.n[1,])
+barplot(table(nc.km.glioblastoma$Best.n[1,]), 
+        xlab="Numer of Clusters", ylab="Number of Criteria",
+        main="Number of Clusters of 512 glioblastoma Genes Chosen by 7 Criteria") 
+
+library(cluster)
+fit.km.glioblastoma <- kmeans(df.km.glioblastoma, 4, nstart=25) 
+fit.km.glioblastoma$size
+fit.km.glioblastoma$centers                                               
+aggregate(glioblastoma[-c(1:2)], by=list(cluster=fit.km.glioblastoma$cluster), mean)
+
+
+clusplot(df.km.glioblastoma, fit.km.glioblastoma$cluster, color=TRUE, shade=TRUE, 
+         labels=1, lines=0, main = "Glioblastoma K-means Cluster Plot")
+
+#w/ ggplot
+autoplot(kmeans(df.km.glioblastoma, 4), data = df.km.glioblastoma, frame = TRUE, main = "K-means Clustering of Glioblastoma Genes")
+df.km <- fortify(kmeans(df.km.glioblastoma, 4), data = df.km.glioblastoma)
+ggplot(df.km, aes(x= cluster, fill = cluster)) + geom_bar()
+
+#K-means affected by outlier, check if PAM method better
+set.seed(1234)
+fit.pam.glioblastoma <- pam(df.km.glioblastoma, k = 4, stand=TRUE)
+fit.pam.glioblastoma$medoids
+clusplot(fit.pam.glioblastoma,color=TRUE, shade=TRUE, 
+         labels=1, lines=0, main = "Glioblastoma PAM Cluster Plot")
+#w/ggplot
+autoplot(pam(df.km.glioblastoma, 4), data = df.km.glioblastoma, frame = TRUE, main = "PAM Clustering of Glioblastoma Genes")
+df.pam <- fortify(pam(df.km.glioblastoma, 4), data = df.km.glioblastoma)
+ggplot(df.pam, aes(x= cluster, fill = cluster)) + geom_bar()
+#Pam method isn't better, need to remove outliers
+```
+## Remove outlier and re-calculate how many clusters would be ideal
+
+Removing the outliers greatly improved the clustering results. However, outliers might still have valuable information and should be evaluated further.
+```{r Removing Outliers}
+#Need to remove outliers
+library(outliers)
+
+outlier(df.km.glioblastoma)
+outlier(df.km.glioblastoma, opposite = TRUE)
+rm.gbm.outliers <- c("EEF1A1", "SPP1", "PTPRN", "ZIC3", "PTPRN2", "CCT3","ENO1", "CTSB", "MTHFD2", "FUCA1", 
+                     "GNB2L1", "GDI2", "APLP2", "HSP90B1", "IGFBP2","NRCAM", "AEBP1", "HTRA1", "GSN")
+tno.pam.glioblastoma<- df.km.glioblastoma[!rownames(df.km.glioblastoma) %in% rm.gbm.outliers,]
+
+no.pam.glioblastoma<-scale(tno.pam.glioblastoma)*10
+
+wssplot(no.pam.glioblastoma)
+nbo.km.glioblastoma <- NbClust(tno.pam.glioblastoma, min.nc=2, max.nc=25, method="kmeans")
+par(opar)
+table(nbo.km.glioblastoma$Best.n[1,])
+barplot(table(nbo.km.glioblastoma$Best.n[1,]), 
+        xlab="Numer of Clusters", ylab="Number of Criteria",
+        main="Number of Clusters of GBM Genes Chosen by 7 Criteria with Outliers Removed") 
+
+```
+
+
+## Plot K-means and Pam Clustering with Outliers Removed
+
+```{r K-means w/o Outliers}
+#K means w/o outliers
+no.km.glioblastoma <- kmeans(no.pam.glioblastoma, 3, iter.max = 16, nstart=25) 
+no.km.glioblastoma$size
+no.km.glioblastoma$centers                                               
+aggregate(no.pam.glioblastoma, by=list(cluster=no.km.glioblastoma$cluster), mean)
+str(no.km.glioblastoma)
+clusplot(no.pam.glioblastoma, no.km.glioblastoma$cluster, color=TRUE, shade=TRUE, 
+         labels=1, lines=0, main = "Glioblastoma K-means Cluster Plot, Outliers Removed")
+
+#W/ ggplot
+autoplot(kmeans(tno.pam.glioblastoma, 4), data =tno.pam.glioblastoma, frame = TRUE, main = "K-means Clustering of Glioblastoma Genes")
+no.df.km <- fortify(kmeans(tno.pam.glioblastoma, 4), data = tno.pam.glioblastoma)
+ggplot(no.df.km, aes(x= cluster, fill = cluster)) + geom_bar()
+
+
+#PAM plot w/o outliers
+gg.pam.glioblastoma<-tno.pam.glioblastoma
+colnames(gg.pam.glioblastoma)<- c("unweighted_meta_z_all", "precog_Z", "cox_coefficient","pvalue", "bh_pvalue", "median_expression", "mean_expresson")
+autoplot(pam(gg.pam.glioblastoma, 3), data = gg.pam.glioblastoma, frame = TRUE, main = "PAM Clustering of Glioblastoma Genes, Outliers Removed")
+no.df.km <- fortify(pam(no.pam.glioblastoma, 3), data = no.pam.glioblastoma)
+ggplot(no.df.km, aes(x= cluster, fill = cluster)) + geom_bar()
+```
+##Visualizing Distance Matrices (STHDA)
+
+A simple solution for visualizing the distance matrices is to use the function corrplot() [in corrplot package]. Here I continued my exploration of clustering analysis visualization by applying the 50 glioblastoma and glioma data to visual the eculidan distances clustering with heat maps. 
+
+```{r Euclidean Heatmaps}
+library("corrplot")
+
+#Use corrplot to view distance matrices
+
+#Glioblastoma
+d.r50.gbm.eucl<- dist(nc.r50.glioblastoma, method = "euclidean")
+corrplot(as.matrix(d.r50.gbm.eucl), is.corr = FALSE, method = "color")
+par(opar)
+#Glioma
+d.r50.gli.eucl<- dist(nc.r50.glioma, method = "euclidean")
+corrplot(as.matrix(d.r50.gli.eucl), is.corr = FALSE, method = "color")
+par(opar)
+
+#Use heatmap w/ dendogram
+#Glioblastoma
+heatmap(as.matrix(d.r50.gbm.eucl), symm = TRUE, distfun = function(x) as.dist(x))
+par(opar)
+#Glioma
+heatmap(as.matrix(d.r50.gli.eucl), symm = TRUE, distfun = function(x) as.dist(x))
+par(opar)
+```
+
+
+
+##Visualing Distance Matrices using factoextra R package:
+
+I explored the factoextra clustering package. The function  get_dist() is used for computing a distance matrix between the rows of a data matrix. Compared to the standard dist() function used in previous methods, get_dist() supports correlation-based distance measures including "pearson", "kendall", and "spearman". The function fviz_dist() creats a heatmap like plot for visualizing the distance matrix.
+
+I used the 50 glioma gene dataset to see how different correlation-based distance measured varried over the same data.
+```{r factoextra}
+library(factoextra)
+#50 Glioma genes using Pearson Method
+p.res.dist <- get_dist(nc.r50.glioma, stand = TRUE, method = "pearson")
+fviz_dist(p.res.dist, 
+   gradient = list(low = "#00AFBB", mid = "white", high = "#FC4E07"))
+par(opar)
+#50 Glioma genes using Kendall Method
+k.res.dist <- get_dist(nc.r50.glioma, stand = TRUE, method = "kendall")
+fviz_dist(k.res.dist, 
+   gradient = list(low = "#00AFBB", mid = "white", high = "#FC4E07"))
+par(opar)
+#50 Glioma genes using Spearman Method
+s.res.dist <- get_dist(nc.r50.glioma, stand = TRUE, method = "spearman")
+fviz_dist(s.res.dist, 
+   gradient = list(low = "#00AFBB", mid = "white", high = "#FC4E07"))
+par(opar)
+```
+
+##K-means Clustering using Factoextra Package
+
+The factoextra package also has a function like nbclust to help determine the optimal number of clusters for a data set. I've tested in on the 50 glioma gene dataset below. Unlike the nbclust function used earlier, the fviz_nbclust function suggested 4 clusters instead of 3. 
+
+```{r K-means factoextra}
+fviz_nbclust(nc.r50.glioma, kmeans, method = "gap_stat")
+km.res <- kmeans(nc.r50.glioma, 4, nstart = 25)
+# Visualize
+library("factoextra")
+fviz_cluster(km.res, data = nc.r50.glioma, geom = "point", show.clust.cent = TRUE, ellipse.type = "convex")+
+  theme_minimal()
+
+
+```
+
+
+
+
+
+
+
