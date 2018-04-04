@@ -8,9 +8,9 @@ library(ggplot)
 
 library(readxl)
 #Loading data files from excel and subsetting glioblastoma and glioma cancer gene sets
-precogdata <- read_excel("/Users/louisecabansay/Downloads/Precog_MetaZ.xlsx")
-gbm.oncolnc <- read_excel("/Users/louisecabansay/Documents/School Work/UCBX R Class/GBM_mrna.xlsx")
-gli.oncolnc <- read_excel("/Users/louisecabansay/Documents/School Work/UCBX R Class/LowerGradeGlioma.xlsx")
+precogdata <- read_excel("recog_MetaZ.xlsx")
+gbm.oncolnc <- read_excel("GBM_mrna.xlsx")
+gli.oncolnc <- read_excel("LowerGradeGlioma.xlsx")
 gbm.precog <-  data.frame(precogdata$Gene, precogdata$Name, precogdata$`Unweighted_meta-Z_of_all_cancers`, precogdata$Brain_cancer_Glioblastoma)
 gli.precog <-  data.frame(precogdata$Gene, precogdata$Name, precogdata$`Unweighted_meta-Z_of_all_cancers`, precogdata$Brain_cancer_Glioma)
 
@@ -175,8 +175,8 @@ write.csv(glioblastoma_50_Genes_C, "Table_Glioblastoma_50genes_5Clust.csv")
 #save randomly generated gene df into csv for reproducibility 
 
 #note: for markdown file, loaded previous randomly generated df for report analysis
-gbm.oncolnc <- read.csv("/Users/louisecabansay/Documents/School Work/UCBX R Class/GBM_mrna.xlsx")
-gli.oncolnc <- read.csv("/Users/louisecabansay/Documents/School Work/UCBX R Class/LowerGradeGlioma.xlsx")
+gbm.oncolnc <- read.csv("GBM_mrna.xlsx")
+gli.oncolnc <- read.csv("LowerGradeGlioma.xlsx")
 
 write.csv(r100.glioblastoma, "r100glioblastoma.csv")
 write.csv(r100.glioma, "r100glioma.csv")
