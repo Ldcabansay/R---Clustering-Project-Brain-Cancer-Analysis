@@ -25,9 +25,9 @@ library(psych)
 ## Datasets Used
 Gene expression data is based on The Cancer Genome Atlast (TCGA) found on the National Cancer Institute's Genomic Data Portal (https://gdc-portal.nci.nih.gov/). Survival data was derived from Stanford's Precog database (https://precog.stanford.edu/), and Oncolnc (http://www.oncolnc.org/). The data was reformatted to suit clusting analysis.
 ```{r loading datasets for clustering, echo=TRUE}
-precogdata <- read_excel("/Users/louisecabansay/Downloads/Precog_MetaZ.xlsx")
-gbm.oncolnc <- read_excel("/Users/louisecabansay/Documents/School Work/UCBX R Class/GBM_mrna.xlsx")
-gli.oncolnc <- read_excel("/Users/louisecabansay/Documents/School Work/UCBX R Class/LowerGradeGlioma.xlsx")
+precogdata <- read_excel("Precog_MetaZ.xlsx")
+gbm.oncolnc <- read_excel("GBM_mrna.xlsx")
+gli.oncolnc <- read_excel("LowerGradeGlioma.xlsx")
 gbm.precog <-  data.frame(precogdata$Gene, precogdata$Name, precogdata$`Unweighted_meta-Z_of_all_cancers`, precogdata$Brain_cancer_Glioblastoma)
 gli.precog <-  data.frame(precogdata$Gene, precogdata$Name, precogdata$`Unweighted_meta-Z_of_all_cancers`, precogdata$Brain_cancer_Glioma)
 #examine data
@@ -231,8 +231,8 @@ For markdownfile a previously generated random gene list was loaded
 #write.csv(r100.glioblastoma, "r100glioblastoma.csv")
 #write.csv(r100.glioma, "r100glioma.csv")
 
-r100.glioblastoma <-read.csv("/Users/louisecabansay/Dropbox (Personal)/R Projects/Clustering Project/r100glioblastoma.csv")
-r100.glioma <-read.csv("/Users/louisecabansay/Dropbox (Personal)/R Projects/Clustering Project/r100glioma.csv")
+r100.glioblastoma <-read.csv("r100glioblastoma.csv")
+r100.glioma <-read.csv("r100glioma.csv")
 row.names(r100.glioblastoma) <- r100.glioblastoma$GeneName
 row.names(r100.glioma) <- r100.glioma$GeneName
 
