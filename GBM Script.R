@@ -76,4 +76,4 @@ df.GBM["CancerType"] <- "GBM"
 
 cancerdata<-rbind(df.BRCA, df.GBM, df.LAML, df.LGG, df.PAAD, df.PRAD)
 
-write.csv(cancerdata, file="/Volumes/Macintosh HD/Users/louisecabansay/Dropbox (Personal)/CancerHackers/CancerGeneData.csv")
+#write.csv(cancerdata, file="INSERT PATH")
